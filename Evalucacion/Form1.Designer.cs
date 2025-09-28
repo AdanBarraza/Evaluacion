@@ -74,6 +74,7 @@
             // 
             // cboEntidad
             // 
+            cboEntidad.DropDownStyle = ComboBoxStyle.DropDownList;
             cboEntidad.FormattingEnabled = true;
             cboEntidad.Location = new Point(294, 25);
             cboEntidad.Name = "cboEntidad";
@@ -83,6 +84,7 @@
             // 
             // cboMunicipio
             // 
+            cboMunicipio.DropDownStyle = ComboBoxStyle.DropDownList;
             cboMunicipio.FormattingEnabled = true;
             cboMunicipio.Location = new Point(460, 24);
             cboMunicipio.Name = "cboMunicipio";
@@ -92,6 +94,7 @@
             // 
             // cboEstatus
             // 
+            cboEstatus.DropDownStyle = ComboBoxStyle.DropDownList;
             cboEstatus.FormattingEnabled = true;
             cboEstatus.Location = new Point(626, 25);
             cboEstatus.Name = "cboEstatus";
@@ -174,6 +177,7 @@
             Controls.Add(btnAbrir);
             Controls.Add(dgvDatos);
             Name = "AfiliacionPRI";
+            StartPosition = FormStartPosition.CenterScreen;
             Text = "Afiliacion PRI";
             Load += AfiliacionPRI_Load;
             ((System.ComponentModel.ISupportInitialize)dgvDatos).EndInit();
