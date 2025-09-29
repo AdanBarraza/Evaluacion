@@ -18,7 +18,7 @@ namespace Evalucacion
 
         public AfiliacionPRI()
         {
-            InitializeComponent(); // Inicializa los controles del diseñador
+            InitializeComponent(); // Inicializa los controles del diseÃ±ador
         }
 
         private void AfiliacionPRI_Load(object sender, EventArgs e)
@@ -28,7 +28,7 @@ namespace Evalucacion
             cboEstatus.Items.AddRange(new object[] { "(Todos)", "Afiliado", "No afiliado" });
             cboEstatus.SelectedIndex = 0;
 
-            // Configuración del DataGridView para mejor rendimiento/visual
+            // ConfiguraciÃ³n del DataGridView para mejor rendimiento/visual
             dgvDatos.ReadOnly = true;
             dgvDatos.AllowUserToAddRows = false;
             dgvDatos.AllowUserToDeleteRows = false;
@@ -36,7 +36,7 @@ namespace Evalucacion
             dgvDatos.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.None;
             dgvDatos.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
 
-            // Asegura consistencia inicial de habilitación de DateTimePicker con los CheckBox
+            // Asegura consistencia inicial de habilitaciÃ³n de DateTimePicker con los CheckBox
             dtpDesde.Enabled = chkDesde.Checked;
             dtpHasta.Enabled = chkHasta.Checked;
 
@@ -46,10 +46,10 @@ namespace Evalucacion
 
         private async void btnAbrir_Click(object sender, EventArgs e)
         {
-            // Diálogo para elegir archivo
+            // DiÃ¡logo para elegir archivo
             using var ofd = new OpenFileDialog
             {
-                Title = "Abrir padrón (XLSX/CSV/JSON)",
+                Title = "Abrir padrÃ³n (XLSX/CSV/JSON)",
                 Filter = "Excel (*.xlsx)|*.xlsx|CSV (*.csv)|*.csv|JSON (*.json)|*.json|Todos (*.*)|*.*"
             };
             if (ofd.ShowDialog() != DialogResult.OK) return;
@@ -62,7 +62,7 @@ namespace Evalucacion
                 // Carga del archivo en DataTable (hilo de fondo para no congelar UI)
                 DataTable nueva = await Task.Run(() => DataLoader.CargarTabla(path));
 
-                // ¿Ya había datos cargados en _tabla?
+                // Â¿Ya habÃ­a datos cargados en _tabla?
                 bool hayDatos = _tabla != null && _tabla.Rows.Count > 0;
 
                 if (!hayDatos)
@@ -74,7 +74,7 @@ namespace Evalucacion
                 {
                     // Ya hay datos: pregunta si combinar o reemplazar
                     var resp = MessageBox.Show(
-                        "Ya hay un padrón cargado.\n\n¿Quieres AGREGAR (combinar) este archivo al actual?\n\nSí = Agregar (combinar)\nNo = Reemplazar\nCancelar = Volver",
+                        "Ya hay un padrÃ³n cargado.\n\nÂ¿Quieres AGREGAR (combinar) este archivo al actual?\n\nSÃ­ = Agregar (combinar)\nNo = Reemplazar\nCancelar = Volver",
                         "Cargar otro archivo",
                         MessageBoxButtons.YesNoCancel,
                         MessageBoxIcon.Question);
@@ -93,9 +93,6 @@ namespace Evalucacion
                     }
                 }
 
-                // (Opcional) si deseas evitar abrir el mismo archivo 2 veces:
-                // _archivosCargados.Add(path);
-
                 // Crea/actualiza la vista y la enlaza al DataGridView
                 _vista = new DataView(_tabla);
                 dgvDatos.DataSource = _vista;
@@ -104,7 +101,7 @@ namespace Evalucacion
                 PoblarEntidades();
                 PoblarMunicipios();
 
-                // Asegura opciones e índice del estatus
+                // Asegura opciones e Ã­ndice del estatus
                 if (cboEstatus.Items.Count == 0)
                     cboEstatus.Items.AddRange(new object[] { "(Todos)", "Afiliado", "No afiliado" });
                 cboEstatus.SelectedIndex = 0;
@@ -116,7 +113,7 @@ namespace Evalucacion
                 // Info de conteo total
                 lblInfo.Text = $"Cargadas: {_tabla.Rows.Count:n0} filas, {_tabla.Columns.Count} columnas";
 
-                // Rehabilita filtros y asegura índices válidos en combos
+                // Rehabilita filtros y asegura Ã­ndices vÃ¡lidos en combos
                 txtNombre.Enabled = true;
                 cboEntidad.Enabled = true;
                 cboMunicipio.Enabled = true;
@@ -147,11 +144,11 @@ namespace Evalucacion
             // Limpia completamente la app (no borra el archivo del disco)
             EstadoSinArchivo();
 
-            // (Opcional) si usaste la prevención de archivo duplicado:
+            // (Opcional) si usaste la prevenciÃ³n de archivo duplicado:
             // _archivosCargados.Clear();
         }
 
-        // Evento del TextBox de búsqueda por nombre
+        // Evento del TextBox de bÃºsqueda por nombre
         private void txtNombre_TextChanged(object sender, EventArgs e)
         {
             AplicarFiltros();
@@ -177,7 +174,7 @@ namespace Evalucacion
 
         private void chkDesde_CheckedChanged(object sender, EventArgs e)
         {
-            // Habilita/deshabilita el DateTimePicker según el checkbox
+            // Habilita/deshabilita el DateTimePicker segÃºn el checkbox
             dtpDesde.Enabled = chkDesde.Checked;
             AplicarFiltros();
         }
@@ -198,7 +195,7 @@ namespace Evalucacion
             AplicarFiltros();
         }
 
-        // Construye la expresión RowFilter con todos los filtros activos y la aplica a _vista
+        // Construye la expresiÃ³n RowFilter con todos los filtros activos y la aplica a _vista
         private void AplicarFiltros()
         {
             if (_vista == null) return;
@@ -241,11 +238,11 @@ namespace Evalucacion
             // Aplica el filtro combinado (AND)
             _vista.RowFilter = string.Join(" AND ", filtros);
 
-            // Feedback en UI: cuántas filas visibles vs total
+            // Feedback en UI: cuÃ¡ntas filas visibles vs total
             lblInfo.Text = $"Mostrando: {_vista.Count:n0} / {_tabla.Rows.Count:n0} filas";
         }
 
-        // Llena el ComboBox de Entidades a partir de los valores únicos en la tabla
+        // Llena el ComboBox de Entidades a partir de los valores Ãºnicos en la tabla
         private void PoblarEntidades()
         {
             var valores = new List<string> { "(Todas)" };
@@ -288,7 +285,7 @@ namespace Evalucacion
                     q = _tabla.AsEnumerable().Select(r => r["Municipio"]?.ToString() ?? "");
                 }
 
-                // Distintos, no vacíos y ordenados alfabéticamente
+                // Distintos, no vacÃ­os y ordenados alfabÃ©ticamente
                 var dist = q.Select(s => s.Trim())
                             .Where(s => !string.IsNullOrEmpty(s))
                             .Distinct(StringComparer.OrdinalIgnoreCase)
@@ -312,7 +309,7 @@ namespace Evalucacion
             dgvDatos.Rows.Clear();
             dgvDatos.Columns.Clear();
 
-            // Filtros: limpia y sin selección
+            // Filtros: limpia y sin selecciÃ³n
             txtNombre.Clear();
 
             cboEntidad.DataSource = null;
@@ -326,7 +323,7 @@ namespace Evalucacion
             // Asegura opciones de estatus (si no estuvieran)
             if (cboEstatus.Items.Count == 0)
                 cboEstatus.Items.AddRange(new object[] { "(Todos)", "Afiliado", "No afiliado" });
-            cboEstatus.SelectedIndex = 0; // puedes usar -1 si no quieres selección por defecto
+            cboEstatus.SelectedIndex = 0; // puedes usar -1 si no quieres selecciÃ³n por defecto
 
             chkDesde.Checked = false;
             chkHasta.Checked = false;
@@ -360,7 +357,7 @@ namespace Evalucacion
         // Agrega (importa) filas de 'origen' a 'destino', alineando columnas; marca archivo de origen
         private static void AppendTabla(DataTable destino, DataTable origen, string archivoOrigen)
         {
-            // Asegura columna para saber de qué archivo vino cada fila
+            // Asegura columna para saber de quÃ© archivo vino cada fila
             if (!destino.Columns.Contains("ArchivoOrigen"))
                 destino.Columns.Add("ArchivoOrigen", typeof(string));
             if (!origen.Columns.Contains("ArchivoOrigen"))
@@ -369,12 +366,12 @@ namespace Evalucacion
             foreach (DataRow r in origen.Rows)
                 r["ArchivoOrigen"] = archivoOrigen;
 
-            // Alinea columnas: agrega al destino las que faltan del origen…
+            // Alinea columnas: agrega al destino las que faltan del origenÂ…
             foreach (DataColumn c in origen.Columns)
                 if (!destino.Columns.Contains(c.ColumnName))
                     destino.Columns.Add(c.ColumnName, c.DataType);
 
-            // …y al origen las que falten del destino
+            // Â…y al origen las que falten del destino
             foreach (DataColumn c in destino.Columns)
                 if (!origen.Columns.Contains(c.ColumnName))
                     origen.Columns.Add(c.ColumnName, c.DataType);
