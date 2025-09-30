@@ -50,7 +50,7 @@ namespace Evalucacion
         }
 
         // NOTA DE DISEÑO:
-        // Usamos Task.Run + await para cargar/parsear el archivo en segundo plano SIN congelar la UI.
+        // Use Task.Run + await para cargar/parsear el archivo en segundo plano SIN congelar la UI.
         // Ventajas frente a Thread manual:
         // 1) await reanuda en el hilo de UI (no hace falta this.Invoke para tocar controles),
         // 2) las excepciones fluyen con try/catch normal,
