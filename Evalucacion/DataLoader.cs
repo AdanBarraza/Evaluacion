@@ -1,26 +1,26 @@
-﻿using System;                               // Tipos base (Exception, etc.)
-using System.Collections.Generic;           // Dictionary, HashSet, List
+﻿using System;                               // Tipos base (Exception, DateTime, etc.)
+using System.Collections.Generic;           // Dictionary, List, HashSet
 using System.Data;                          // DataTable, DataRow, DataColumn
-using System.Globalization;                 // CultureInfo para parsear fechas
-using System.IO;                            // File, Path, StreamReader
+using System.Globalization;                 // CultureInfo y DateTimeStyles para parsear fechas
+using System.IO;                            // File, Path, FileStream
 using System.Linq;                          // LINQ (Select, Where, Distinct, etc.)
 using System.Text;                          // StringBuilder, Encoding
-using System.Text.Json;                     // System.Text.Json para leer JSON
-using ClosedXML.Excel;    // NuGet          // ClosedXML: para leer XLSX
-using CsvHelper;          // NuGet          // CsvHelper: para leer CSV
-using CsvHelper.Configuration;              // Configuración de CsvHelper
+using ClosedXML.Excel;    // NuGet          // Librería para leer archivos .xlsx de forma sencilla
 
+// Clase utilitaria estática: abre un archivo .xlsx y lo convierte a un DataTable “uniformado”
+// con nombres de columnas canónicos y tipos útiles (por ejemplo, FechaAfiliacion → DateTime).
 public static class DataLoader
 {
-    // Diccionario para mapear encabezados "variantes" a nombres canónicos.
-    // Ej.: "estado", "Entidad" → "Entidad". Esto permite que los archivos
-    // lleguen con columnas con nombres diferentes pero se unifiquen en el DataTable.
+    // ===== Normalización de encabezados =====
+    // Algunos archivos vienen con encabezados diferentes para la misma columna.
+    // Este diccionario mapea variantes “de la vida real” a un nombre canónico interno.
+    // Ejemplo: "estado", "Entidad", "ESTADO" => "Entidad".
     private static readonly Dictionary<string, string> MapCanonico =
-        new(StringComparer.OrdinalIgnoreCase)
+        new(StringComparer.OrdinalIgnoreCase) // comparación sin distinguir mayúsc/minúsc.
         {
             {"nombre","Nombre"},
             {"nombres","Nombre"},
-            {"apellido","Apellido"},
+            {"apellido","Apellido"},          // NOTA: tu app actual no usa "Apellido", pero se mapea por si aparece.
             {"apellidos","Apellido"},
             {"municipio","Municipio"},
             {"mpio","Municipio"},
@@ -34,246 +34,200 @@ public static class DataLoader
             {"fecha_afiliacion","FechaAfiliacion"},
         };
 
-    // Punto de entrada: según la extensión, delega a XLSX/CSV/JSON.
+    // ===== Punto de entrada =====
+    // Recibe la ruta del archivo, valida extensión y delega la lectura.
     public static DataTable CargarTabla(string path)
     {
-        string ext = Path.GetExtension(path).ToLowerInvariant(); // ".xlsx", ".csv", ".json"
+        // Obtiene la extensión en minúsculas (".xlsx", ".csv", etc.)
+        string ext = Path.GetExtension(path).ToLowerInvariant();
+
+        // Solo aceptamos .xlsx; cualquier otra extensión se rechaza explícitamente.
         return ext switch
         {
-            ".xlsx" => LeerXlsx(path), // Excel
-            ".csv" => LeerCsv(path),  // CSV
-            ".json" => LeerJson(path), // JSON
-            _ => throw new NotSupportedException($"Extensión no soportada: {ext}")
+            ".xlsx" => LeerXlsx(path), // Lectura de Excel
+            _ => throw new NotSupportedException($"Extensión no soportada: {ext} (solo .xlsx)")
         };
     }
 
     // ===== Métodos privados =====
 
-    // Agrega/actualiza una columna "FilaExcel" con el número de fila "humano"
-    // tal como se vería en Excel (offset suele ser 2 si fila 1 es encabezado).
+    // Añade una columna "FilaExcel" que guarda el número de fila "humano" como se ve en Excel.
+    // Esto es útil para correlacionar un registro mostrado con su fila en el archivo de origen.
+    // Ejemplo: si encabezados están en la fila 1, los datos empiezan en 2 => offset = 2.
     private static void NumerarFilas(DataTable dt, int offset)
     {
+        // Crea la columna si no existe aún (tipo int).
         if (!dt.Columns.Contains("FilaExcel"))
             dt.Columns.Add("FilaExcel", typeof(int));
+
+        // Asigna a cada DataRow su número de fila equivalente en Excel: offset + índice local.
         for (int i = 0; i < dt.Rows.Count; i++)
-            dt.Rows[i]["FilaExcel"] = offset + i; // fila 0 -> offset, 1 -> offset+1, etc.
+            dt.Rows[i]["FilaExcel"] = offset + i; // fila 0 -> offset, fila 1 -> offset+1, etc.
     }
 
-    // Lee la PRIMERA hoja de un XLSX a DataTable, tomando la primera fila como encabezados.
+    // Lee la PRIMERA hoja del .xlsx y vuelca los datos a un DataTable:
+    //  - La primera fila “usada” se toma como encabezados.
+    //  - Todas las celdas se cargan inicialmente como string (post-procesamos después).
     private static DataTable LeerXlsx(string path)
     {
         var dt = new DataTable();
 
-        // Abre el workbook desde archivo (ClosedXML se encarga del parseo).
+        // Abre el libro de Excel.
+        // OPCIONAL: si quieres poder leer aunque el archivo esté abierto en Excel, usa:
+        // using var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+        // using var wb = new XLWorkbook(fs);
         using var wb = new XLWorkbook(path);
-        var ws = wb.Worksheet(1); // hoja 1 (1-based)
 
-        bool first = true;                 // bandera para saber si estamos en la fila de encabezados
-        var headers = new List<string>();  // lista de nombres de columna canónicos
+        // Toma siempre la hoja 1 (ClosedXML es 1-based para worksheets).
+        var ws = wb.Worksheet(1);
 
-        // Para numeración: determina en qué fila inicia el encabezado en Excel
+        bool first = true;                 // true mientras procesamos la fila de encabezados
+        var headers = new List<string>();  // lista de nombres canónicos de las columnas
+
+        // Para numerar filas como en Excel:
+        // FirstRowUsed() devuelve la primera fila “con contenido/uso”.
         int headerRowNum = ws.FirstRowUsed().RowNumber(); // normalmente 1
-        int dataStartRowNum = headerRowNum + 1;           // datos empiezan justo debajo
+        int dataStartRowNum = headerRowNum + 1;           // los datos empiezan justo debajo
 
-        // Recorre solo las filas "usadas" (ClosedXML ignora vacías fuera de rango).
+        // Recorremos SOLO filas realmente usadas (ignora vacías al final).
         foreach (var row in ws.RowsUsed())
         {
             if (first)
             {
-                // La primera fila usada se trata como encabezado:
+                // Esta es la fila de encabezados: definimos nombres de columnas.
                 foreach (var cell in row.CellsUsed())
                 {
-                    string h = NormalizarColumna(cell.GetString()); // mapea encabezado → canónico
+                    // Se toma el texto del encabezado y se normaliza (quitar acentos/espacios y mapear a canónico).
+                    string h = NormalizarColumna(cell.GetString());
                     headers.Add(h);
-                    dt.Columns.Add(h, typeof(string));               // todas como string inicialmente
+
+                    // Creamos la columna en el DataTable. Tipo string (ya convertiremos fechas luego).
+                    dt.Columns.Add(h, typeof(string));
                 }
-                first = false;
+                first = false; // las siguientes filas son datos
             }
             else
             {
-                // Resto de filas: datos
+                // Filas de datos:
                 var dr = dt.NewRow();
                 int i = 0;
-                // Toma celdas desde la 1 hasta la cantidad de encabezados esperados
+
+                // Leemos tantas celdas como columnas de encabezado haya (si hay extras a la derecha, se ignoran).
                 foreach (var cell in row.Cells(1, headers.Count))
-                    dr[i++] = cell.GetString(); // texto de la celda
+                    dr[i++] = cell.GetString(); // ClosedXML devuelve string (incluso si la celda es numérica/fecha)
+
                 dt.Rows.Add(dr);
             }
         }
 
-        // Crea/actualiza la columna "FilaExcel" como se ve en Excel (2,3,4,...)
+        // Añade columna "FilaExcel" con numeración equivalente a Excel (2,3,4,...) en función del encabezado detectado.
         NumerarFilas(dt, dataStartRowNum);
 
-        // Post-proceso: fechas, estatus y columnas mínimas
+        // Ajustes finales de tipos y valores canónicos (fechas, estatus, columnas mínimas).
         PostProcesarTipos(dt);
         return dt;
     }
 
-    // Lee un CSV asumiendo primera fila como encabezado (auto-detecta separador).
-    private static DataTable LeerCsv(string path)
-    {
-        var dt = new DataTable();
-
-        // Crea StreamReader con la codificación detectada (BOM UTF-8 o Default)
-        using var reader = new StreamReader(path, DetectEncoding(path));
-
-        // Configuración del lector CSV (CsvHelper)
-        var cfg = new CsvConfiguration(CultureInfo.InvariantCulture)
-        {
-            HasHeaderRecord = true,   // hay encabezado
-            DetectDelimiter = true,   // intenta detectar ',' ';' '\t'
-            BadDataFound = null,      // ignora registros mal formados
-            MissingFieldFound = null, // ignora faltantes
-            IgnoreBlankLines = true   // salta líneas en blanco
-        };
-        using var csv = new CsvReader(reader, cfg);
-
-        // Lee encabezados y crea columnas en DataTable con nombres canónicos
-        csv.Read();
-        csv.ReadHeader();
-        var headers = csv.HeaderRecord.Select(NormalizarColumna).ToArray();
-        foreach (var h in headers) dt.Columns.Add(h, typeof(string));
-
-        // Lee cada registro y llena DataTable como texto
-        while (csv.Read())
-        {
-            var dr = dt.NewRow();
-            for (int i = 0; i < headers.Length; i++)
-                dr[i] = csv.GetField(i); // obtiene campo i como string
-            dt.Rows.Add(dr);
-        }
-
-        // En CSV el encabezado es la fila 1, por lo que los datos inician en 2
-        NumerarFilas(dt, 2);
-
-        PostProcesarTipos(dt);
-        return dt;
-    }
-
-    // Lee un JSON con formato: [ {objeto}, {objeto}, ... ]
-    private static DataTable LeerJson(string path)
-    {
-        var dt = new DataTable();
-
-        // Abre el archivo y parsea todo el documento JSON
-        using var fs = File.OpenRead(path);
-        using var doc = JsonDocument.Parse(fs);
-
-        // Validación: la raíz debe ser un arreglo (lista de registros)
-        if (doc.RootElement.ValueKind != JsonValueKind.Array)
-            throw new Exception("JSON debe ser un arreglo de objetos");
-
-        // Descubre TODAS las propiedades presentes para crear columnas
-        var props = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var el in doc.RootElement.EnumerateArray())
-            foreach (var p in el.EnumerateObject())
-                props.Add(NormalizarColumna(p.Name)); // mapea a nombre canónico
-
-        // Crea las columnas (como string)
-        foreach (var p in props) dt.Columns.Add(p, typeof(string));
-
-        // Recorre el arreglo y llena filas
-        foreach (var el in doc.RootElement.EnumerateArray())
-        {
-            var dr = dt.NewRow();
-            foreach (var p in el.EnumerateObject())
-            {
-                string col = NormalizarColumna(p.Name); // nombre canónico de la propiedad
-                if (!dt.Columns.Contains(col)) continue; // por seguridad
-
-                // Guarda el valor como string (o texto crudo para números/otros)
-                dr[col] = p.Value.ValueKind switch
-                {
-                    JsonValueKind.String => p.Value.GetString(),
-                    JsonValueKind.Number => p.Value.GetRawText(), // mantiene forma original
-                    JsonValueKind.True or JsonValueKind.False => p.Value.GetBoolean().ToString(),
-                    _ => p.Value.GetRawText() // objetos/arrays anidados como JSON
-                };
-            }
-            dt.Rows.Add(dr);
-        }
-
-        // Asumimos encabezados lógicos (propiedades) "en la fila 1", datos desde "2"
-        NumerarFilas(dt, 2);
-
-        PostProcesarTipos(dt);
-        return dt;
-    }
-
-    // Detección rápida de codificación: si hay BOM UTF-8 usa UTF8, si no, default del sistema.
+    // (Actualmente NO se usa, porque solo admitimos .xlsx.)
+    // Se deja como utilitario si en el futuro se reactivan CSV/otros formatos que lo necesiten.
     private static Encoding DetectEncoding(string path)
     {
         using var fs = File.OpenRead(path);
         using var br = new BinaryReader(fs, Encoding.Default, leaveOpen: true);
         var bom = br.ReadBytes(3);
+
+        // Si el archivo tiene BOM UTF-8 (EF BB BF), devolvemos UTF8; en otro caso, codificación por defecto.
         if (bom.Length >= 3 && bom[0] == 0xEF && bom[1] == 0xBB && bom[2] == 0xBF)
             return new UTF8Encoding(true); // UTF-8 con BOM
-        return Encoding.Default;           // otra codificación (ej. ANSI/Windows-1252)
+        return Encoding.Default;           // ANSI / Windows-1252 u otra codificación local
     }
 
-    // Normaliza el nombre de una columna: quita espacios/acentos/guiones/underscores y mapea.
+    // Normaliza nombres de columnas:
+    //  - Quita tildes.
+    //  - Elimina espacios, guiones y underscores para poder buscar en el diccionario.
+    //  - Si hay mapeo, usa el nombre canónico; si no, conserva el original (respetando cómo venía).
     private static string NormalizarColumna(string raw)
     {
-        string s = (raw ?? string.Empty).Trim(); // protege null y recorta
-        // Quita acentos y separadores para comparar en el diccionario
+        string s = (raw ?? string.Empty).Trim(); // protege de null y quita espacios externos
+
+        // Quitamos acentos y separadores (espacio, -, _) para comparar contra MapCanonico.
         string sinAcentos = RemoverAcentos(s).Replace(" ", "").Replace("-", "").Replace("_", "");
-        // Si existe un mapeo, usa el nombre canónico, si no, se queda como vino
+
+        // Intenta mapear a un nombre canónico; si no hay coincidencia, retorna el nombre original.
         return MapCanonico.TryGetValue(sinAcentos, out var canon) ? canon : s;
     }
 
-    // Quita acentos usando normalización Unicode (decompone y filtra NonSpacingMark)
+    // Remueve acentos con normalización Unicode: descompone (FormD) y omite marcas diacríticas.
     private static string RemoverAcentos(string input)
     {
         var norm = input.Normalize(NormalizationForm.FormD);
         var sb = new StringBuilder();
+
         foreach (var c in norm)
         {
             var cat = CharUnicodeInfo.GetUnicodeCategory(c);
-            if (cat != UnicodeCategory.NonSpacingMark) sb.Append(c); // ignora marcas (acentos)
+            if (cat != UnicodeCategory.NonSpacingMark) // omitimos las marcas (acentos)
+                sb.Append(c);
         }
+
+        // Volvemos a componer la cadena (FormC) ya sin acentos.
         return sb.ToString().Normalize(NormalizationForm.FormC);
     }
 
-    // Ajustes finales: convierte FechaAfiliacion a DateTime, normaliza Estatus
-    // y asegura columnas mínimas (Nombre, Entidad, Municipio, Estatus).
+    // Post-procesa el DataTable:
+    //  - Convierte "FechaAfiliacion" (si existe) de string a DateTime (cuando parsea).
+    //  - Normaliza "Estatus" a "Afiliado"/"No afiliado".
+    //  - Se asegura de que existan las columnas clave, creando vacías si faltan.
     private static void PostProcesarTipos(DataTable dt)
     {
-        // Si hay columna "FechaAfiliacion" (texto), crea una DateTime y la sustituye
+        // === 1) FechaAfiliacion -> DateTime ===
         if (dt.Columns.Contains("FechaAfiliacion"))
         {
+            // Creamos una columna temporal de tipo DateTime.
             var colFecha = new DataColumn("__FechaDT", typeof(DateTime));
             dt.Columns.Add(colFecha);
 
+            // Intentamos parsear cada fila; si parsea, se asigna la fecha; si no, queda DBNull (celda vacía).
             foreach (DataRow r in dt.Rows)
             {
                 var txt = r["FechaAfiliacion"]?.ToString();
-                // Intenta parsear con es-MX o InvariantCulture
+
+                // Probamos con cultura "es-MX" (formato local) y con InvariantCulture (ISO u otros).
                 if (DateTime.TryParse(txt, CultureInfo.GetCultureInfo("es-MX"), DateTimeStyles.None, out var f) ||
                     DateTime.TryParse(txt, CultureInfo.InvariantCulture, DateTimeStyles.None, out f))
                 {
-                    r[colFecha] = f; // guarda fecha válida
+                    r[colFecha] = f; // solo guardamos si la conversión fue exitosa
                 }
             }
 
-            // Quita la de texto y renombra la DateTime al nombre original
+            // Eliminamos la columna original (string) y renombramos la DateTime al nombre original.
             dt.Columns.Remove("FechaAfiliacion");
             colFecha.ColumnName = "FechaAfiliacion";
         }
 
-        // Normaliza Estatus a "Afiliado"/"No afiliado" con reglas básicas
+        // === 2) Estatus -> "Afiliado" / "No afiliado" ===
         if (dt.Columns.Contains("Estatus"))
         {
             foreach (DataRow r in dt.Rows)
             {
                 string v = (r["Estatus"]?.ToString() ?? "").Trim().ToLowerInvariant();
-                if (v == "1" || v.Contains("afiliado")) r["Estatus"] = "Afiliado";
-                else if (v == "0" || v.Contains("no afili")) r["Estatus"] = "No afiliado";
+
+                // Reglas simples de normalización: números o cadenas que contengan “afiliado/no afili…”
+                if (v == "1" || v.Contains("afiliado"))
+                    r["Estatus"] = "Afiliado";
+                else if (v == "0" || v.Contains("no afili"))
+                    r["Estatus"] = "No afiliado";
+                // En cualquier otro caso, se deja tal cual vino (por si hay otras marcas).
             }
         }
 
-        // Asegura que existan las columnas clave; si faltan, se crean vacías (string)
+        // === 3) Columnas mínimas aseguradas ===
+        // Garantiza que el DataTable siempre tenga estas columnas, aunque el archivo no las traiga.
+        // Se crean como string vacías para que la UI y los filtros no fallen por columna inexistente.
         foreach (var col in new[] { "Nombre", "Entidad", "Municipio", "Estatus" })
-            if (!dt.Columns.Contains(col)) dt.Columns.Add(col, typeof(string));
+            if (!dt.Columns.Contains(col))
+                dt.Columns.Add(col, typeof(string));
     }
 }
+
 
