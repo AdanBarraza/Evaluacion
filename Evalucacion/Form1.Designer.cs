@@ -45,9 +45,12 @@
             // 
             // dgvDatos
             // 
+            dgvDatos.AllowUserToAddRows = false;
+            dgvDatos.AllowUserToDeleteRows = false;
             dgvDatos.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.AutoSize;
             dgvDatos.Location = new Point(1, 109);
             dgvDatos.Name = "dgvDatos";
+            dgvDatos.ReadOnly = true;
             dgvDatos.RowHeadersWidth = 51;
             dgvDatos.Size = new Size(799, 360);
             dgvDatos.TabIndex = 0;
@@ -163,6 +166,7 @@
             // 
             AutoScaleDimensions = new SizeF(8F, 20F);
             AutoScaleMode = AutoScaleMode.Font;
+            AutoSize = true;
             ClientSize = new Size(800, 558);
             Controls.Add(txtNombre);
             Controls.Add(lblInfo);
@@ -177,6 +181,7 @@
             Controls.Add(btnAbrir);
             Controls.Add(dgvDatos);
             Name = "AfiliacionPRI";
+            ShowIcon = false;
             StartPosition = FormStartPosition.CenterScreen;
             Text = "Afiliacion PRI";
             Load += AfiliacionPRI_Load;

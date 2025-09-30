@@ -33,14 +33,6 @@ namespace Evalucacion
             cboEstatus.Items.AddRange(new object[] { "(Todos)", "Afiliado", "No afiliado" });
             cboEstatus.SelectedIndex = 0; // valor por defecto
 
-            // Configuración del DataGridView para buena performance con tablas grandes.
-            dgvDatos.ReadOnly = true;                                // solo lectura
-            dgvDatos.AllowUserToAddRows = false;                     // sin fila vacía al final
-            dgvDatos.AllowUserToDeleteRows = false;                  // no se borran filas desde UI
-            dgvDatos.RowHeadersVisible = false;                      // oculta encabezados de fila
-            dgvDatos.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.None; // evita autosize costoso
-            dgvDatos.SelectionMode = DataGridViewSelectionMode.FullRowSelect;    // selecciona filas completas
-
             // Los DateTimePicker empiezan habilitados o no según el estado de sus CheckBox asociados.
             dtpDesde.Enabled = chkDesde.Checked;
             dtpHasta.Enabled = chkHasta.Checked;
