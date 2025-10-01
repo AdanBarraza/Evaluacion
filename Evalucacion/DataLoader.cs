@@ -51,9 +51,8 @@ public static class DataLoader
 
     // ===== Métodos privados =====
 
-    // Añade una columna "FilaExcel" que guarda el número de fila "humano" como se ve en Excel.
-    // Esto es útil para correlacionar un registro mostrado con su fila en el archivo de origen.
-    // Ejemplo: si encabezados están en la fila 1, los datos empiezan en 2 => offset = 2.
+    //Agrega una columna extra con el número de fila real en Excel,
+    //para que el usuario pueda identificar rápidamente en qué fila estaba el registro original.
     private static void NumerarFilas(DataTable dt, int offset)
     {
         // Crea la columna si no existe aún (tipo int).
@@ -174,10 +173,10 @@ public static class DataLoader
         return sb.ToString().Normalize(NormalizationForm.FormC);
     }
 
-    // Post-procesa el DataTable:
-    //  - Convierte "FechaAfiliacion" (si existe) de string a DateTime (cuando parsea).
-    //  - Normaliza "Estatus" a "Afiliado"/"No afiliado".
-    //  - Se asegura de que existan las columnas clave, creando vacías si faltan.
+    //Aquí se hacen ajustes a los datos que vienen de Excel.
+    //Por ejemplo, convierte las fechas de texto a un formato de fecha real,
+    //normaliza los estatus para que todos aparezcan como ‘Afiliado’ o ‘No afiliado’,
+    //y se asegura de que existan las columnas más importantes como Nombre, Entidad y Municipio.”
     private static void PostProcesarTipos(DataTable dt)
     {
         // === 1) FechaAfiliacion -> DateTime ===

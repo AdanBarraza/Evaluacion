@@ -51,6 +51,7 @@
             dgvDatos.Location = new Point(1, 109);
             dgvDatos.Name = "dgvDatos";
             dgvDatos.ReadOnly = true;
+            dgvDatos.RowHeadersVisible = false;
             dgvDatos.RowHeadersWidth = 51;
             dgvDatos.Size = new Size(799, 360);
             dgvDatos.TabIndex = 0;

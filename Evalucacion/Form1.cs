@@ -48,6 +48,11 @@ namespace Evalucacion
         // 2) las excepciones fluyen con try/catch normal,
         // 3) usa thread pool (más eficiente) y es el patrón moderno en .NET (TPL).
         // Si se exigiera Thread, habría que hacer this.Invoke al volver y capturar errores dentro del hilo.
+
+        //Este método se ejecuta al presionar el botón Abrir. Muestra un cuadro de diálogo para seleccionar un archivo
+        //Excel, lo carga en segundo plano para que la aplicación no se congele,
+        //y decide si reemplazar los datos que ya estaban o combinarlos con el nuevo archivo.
+        //Luego actualiza la tabla que se muestra en el DataGridView y repuebla los combos de filtros
         private async void btnAbrir_Click(object sender, EventArgs e)
         {
             // Diálogo estándar para elegir archivo. Filtra a solo .xlsx.
@@ -113,14 +118,14 @@ namespace Evalucacion
                 cboEstatus.SelectedIndex = 0;
 
                 // Limpia filtros de texto y apaga filtros de fecha para empezar “desde cero”.
-                txtNombre.Clear();
+                //txtNombre.Clear();
                 chkDesde.Checked = chkHasta.Checked = false;
 
                 // Muestra información de cuántas filas y columnas se cargaron.
                 lblInfo.Text = $"Cargadas: {_tabla.Rows.Count:n0} filas, {_tabla.Columns.Count} columnas";
 
                 // Rehabilita todos los controles de filtrado ahora que hay datos.
-                txtNombre.Enabled = true;
+                //txtNombre.Enabled = true;
                 cboEntidad.Enabled = true;
                 cboMunicipio.Enabled = true;
                 cboEstatus.Enabled = true;
@@ -204,8 +209,11 @@ namespace Evalucacion
             AplicarFiltros(); // cambia la fecha máxima del rango
         }
 
-        // Construye la expresión RowFilter (tipo SQL simplificado) a partir de los controles de filtro
-        // y la aplica sobre la DataView para que el DataGridView muestre solo las filas que cumplen.
+
+        //Aquí está la lógica de filtrado. Dependiendo de lo que el usuario escriba o
+        //seleccione en los combos y fechas, se construye una condición y se aplica a la vista de datos.
+        //Eso permite mostrar solo las filas que cumplen con los filtros.
+        //Al final también actualiza la etiqueta con el número de filas visibles.
         private void AplicarFiltros()
         {
             if (_vista == null) return; // sin datos cargados, nada que filtrar
@@ -213,19 +221,19 @@ namespace Evalucacion
             var filtros = new List<string>(); // acumulador de condiciones individuales
 
             // ---- 1) Filtro de texto libre sobre "Nombre" ----
-            string texto = txtNombre.Text.Trim();
-            if (!string.IsNullOrEmpty(texto))
+           // string texto = txtNombre.Text.Trim();
+            //if (!string.IsNullOrEmpty(texto))
             {
                 // RowFilter usa LIKE con comodines (% y _) y soporta caracteres especiales.
                 // Aquí escapamos comillas y corchetes para evitar errores y que cuente como literal.
-                string esc = texto.Replace("'", "''")   // escapa comilla simple
-                                  .Replace("%", "[%]")  // trata % como texto
-                                  .Replace("_", "[_]")  // trata _ como texto
-                                  .Replace("[", "[[")   // trata [ como texto
-                                  .Replace("]", "]]");  // trata ] como texto
+              //  string esc = texto.Replace("'", "''")   // escapa comilla simple
+                //                  .Replace("%", "[%]")  // trata % como texto
+                  //                .Replace("_", "[_]")  // trata _ como texto
+                    //              .Replace("[", "[[")   // trata [ como texto
+                      //            .Replace("]", "]]");  // trata ] como texto
 
                 // Convert(, 'System.String') asegura tratar la columna como texto por si el origen varía.
-                filtros.Add($"Convert([Nombre], 'System.String') LIKE '%{esc}%'");
+                //filtros.Add($"Convert([Nombre], 'System.String') LIKE '%{esc}%'");
             }
 
             // ---- 2) Filtro por Entidad exacta (si no es "(Todas)") ----
@@ -254,7 +262,9 @@ namespace Evalucacion
             lblInfo.Text = $"Mostrando: {_vista.Count:n0} / {_tabla.Rows.Count:n0} filas";
         }
 
-        // Llena el ComboBox de Entidades con valores únicos presentes en la columna "Entidad".
+        //Llena el ComboBox de Entidad con los valores únicos que encuentra en la tabla.
+        //Básicamente recorre la columna de Entidad, elimina duplicados y los ordena alfabéticamente para que el usuario
+        //pueda filtrar de manera rápida.
         private void PoblarEntidades()
         {
             var valores = new List<string> { "(Todas)" }; // primera opción: sin filtro
@@ -274,7 +284,8 @@ namespace Evalucacion
             cboEntidad.DataSource = valores;
         }
 
-        // Llena el ComboBox de Municipios. Si hay Entidad seleccionada (≠ "(Todas)"), solo lista los de esa.
+        //Hace lo mismo que PoblarEntidades pero con los municipios. Además, si ya se seleccionó una entidad,
+        //solo carga los municipios que corresponden a esa entidad. Así el filtro es más preciso.
         private void PoblarMunicipios()
         {
             var valores = new List<string> { "(Todos)" }; // primera opción: sin filtro
@@ -313,6 +324,9 @@ namespace Evalucacion
         }
 
         // Deja la app en estado “sin archivo cargado”: grid vacío, filtros apagados, mensaje informativo.
+        //Este método limpia toda la aplicación como si acabáramos de abrirla:
+        //borra la tabla, deja vacío el DataGridView, resetea los combos y filtros,
+        //y muestra un mensaje de que no hay archivo cargado. Es lo que se ejecuta cuando se presiona el botón Reset.
         private void EstadoSinArchivo()
         {
             // Datos: sin vista (null) y tabla vacía (nueva instancia).
@@ -371,6 +385,10 @@ namespace Evalucacion
         }
 
         // Combina 'origen' dentro de 'destino': alinea columnas, etiqueta el archivo de origen y copia filas.
+
+        //Este método se usa cuando abrimos más de un archivo y queremos combinarlos.
+        //Se asegura de que ambas tablas tengan las mismas columnas, agrega una columna para identificar de qué archivo
+        //vino cada registro, y finalmente importa todas las filas del archivo nuevo a la tabla principal.
         private static void AppendTabla(DataTable destino, DataTable origen, string archivoOrigen)
         {
             // 1) Garantiza la existencia de la columna de traza "ArchivoOrigen" en ambas tablas.
